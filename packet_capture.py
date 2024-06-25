@@ -1,9 +1,6 @@
-import scapy.all as scapy
-from scapy.layers.inet import IP, TCP, UDP
 import pandas as pd
-import time
-from collections import defaultdict
 from scapy.all import *
+from scapy.layers.inet import IP, TCP, UDP
 
 # Khởi tạo danh sách các thuộc tính
 attributes = [
@@ -74,8 +71,8 @@ def calculate_statistics(packet_lengths):
 def process_packet(packet):
     global df
     if IP in packet:
-        flow_key = (packet[IP].src, packet[IP].dst, packet[IP].sport, packet[IP].dport)
-        flow = flows[flow_key]
+        destination_port = packet[IP].dport
+        flow = flows[destination_port]
 
         current_time = packet.time
 
@@ -215,7 +212,7 @@ def process_packet(packet):
 
 
 # Đặt thời gian thu thập (tính bằng giây)
-capture_duration = 60
+capture_duration = 10
 
 # Lưu thời gian bắt đầu
 start_time = time.time()
@@ -225,9 +222,10 @@ while time.time() - start_time <= capture_duration:
     sniff(iface='Wi-Fi', prn=process_packet, count=1)
 
 # Chuyển đổi dữ liệu thành DataFrame
-df = pd.DataFrame.from_dict(flows, orient='index').reset_index()
+df = pd.DataFrame(df)
+print(df.head())
 
 # Lưu dữ liệu vào tệp CSV
-df.to_csv('C:\\Users\\Admin\\Learning\\University\\Scientific_Research\\RandomForestIDS\\captured_packets.csv', index=False)
+time_stamp = time.strftime('%Y-%m-%d_%H-%M-%S')
+df.to_csv(f'result_{time_stamp}.csv', index=False)
 
-print("Capture finished and data saved to captured_packets.csv")

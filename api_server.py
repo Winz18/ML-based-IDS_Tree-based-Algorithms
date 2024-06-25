@@ -1,3 +1,4 @@
+import numpy as np
 from flask import Flask, request, jsonify
 import pandas as pd
 import joblib
@@ -14,7 +15,6 @@ def evaluate():
     data = request.json  # Nhận dữ liệu từ client dưới dạng JSON
     df = pd.DataFrame(data)  # Chuyển đổi dữ liệu JSON thành DataFrame
 
-    # Tiền xử lý dữ liệu (giống như bạn đã làm khi huấn luyện mô hình)
     numeric_features = df.select_dtypes(include=[np.number]).columns.tolist()
     df[numeric_features] = scaler.transform(df[numeric_features])  # Chuẩn hóa dữ liệu
 

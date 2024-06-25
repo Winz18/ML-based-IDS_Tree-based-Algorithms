@@ -30,45 +30,9 @@ data8 = pd.read_csv(file_path8)
 
 data1 = pd.concat([data1, data2, data3, data4, data5, data6, data7, data8])
 
-important_columns = [
-    " Subflow Fwd Bytes",
-    " Average Packet Size",
-    " Avg Fwd Segment Size",
-    " Fwd Packet Length Mean",
-    " Avg Bwd Segment Size",
-    "Total Length of Fwd Packets",
-    " Fwd Packet Length Max",
-    "Bwd Packet Length Max",
-    " Max Packet Length",
-    "Init_Win_bytes_forward",
-    " Total Length of Bwd Packets",
-    " Bwd Packet Length Mean",
-    " Packet Length Std",
-    " Packet Length Variance",
-    " ACK Flag Count",
-    " Packet Length Mean",
-    " Bwd Packet Length Std",
-    " act_data_pkt_fwd",
-    " Bwd Header Length",
-    " Bwd Packets/s",
-    "Subflow Fwd Packets",
-    " Bwd Packet Length Min",
-    " PSH Flag Count",
-    " Total Fwd Packets",
-    " Subflow Bwd Bytes",
-    " Fwd Header Length.1",
-    " Fwd Header Length",
-    " Fwd IAT Std",
-    " Subflow Bwd Packets",
-    " Fwd Packet Length Min",
-    " Flow IAT Mean",
-    " Label"
-]
-
-data1 = data1[important_columns]
-
 
 ''' Xử lý dữ liệu '''
+
 print("Before data processing:")
 print(data1.shape)
 print(data1.info())

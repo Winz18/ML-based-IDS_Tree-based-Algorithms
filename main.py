@@ -8,7 +8,7 @@ def load_data(file_path):
 
 
 def send_data_to_server(data):
-    url = 'http://127.0.0.1:5000/api/evaluate'  # Địa chỉ của API Server
+    url = 'http://127.0.0.1:5000/api/evaluate'
     headers = {'Content-Type': 'application/json'}
     response = requests.post(url, json=data, headers=headers)
 
@@ -20,7 +20,7 @@ def send_data_to_server(data):
 
 
 if __name__ == "__main__":
-    csv_file_path = 'extracted_features.csv'  # Đường dẫn tới file CSV chứa dữ liệu thuộc tính
+    csv_file_path = 'extracted_features.csv'
     data_to_send = load_data(csv_file_path)
     result = send_data_to_server(data_to_send)
 
