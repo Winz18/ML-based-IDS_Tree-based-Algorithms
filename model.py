@@ -1,6 +1,7 @@
 import joblib
 import numpy as np
 import pandas as pd
+from imblearn.over_sampling import SMOTE
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, VotingClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split
@@ -10,11 +11,6 @@ from sklearn.tree import DecisionTreeClassifier
 
 def load_and_clean_data(file_path):
     df = pd.read_csv(file_path)
-    print(df[' Label'].value_counts())
-
-    # Kiểm tra giá trị thiếu
-    print("Missing values per column:")
-    print(df.isnull().sum())
 
     # Loại bỏ các hàng có giá trị thiếu lần 1
     df = df.dropna()
@@ -50,22 +46,29 @@ def preprocess_and_split_data(df, numeric_features):
 
     # Chia data theo tỷ lệ 8:2
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    print(y_train.value_counts())
+
+    # Sử dụng Smote để cân bằng dữ liệu
+    smote = SMOTE(random_state=42, n_jobs=-1, sampling_strategy={4: 1500})
+    X_train, y_train = smote.fit_resample(X_train, y_train)
+    print(y_train.value_counts())
 
     return X_train, X_test, y_train, y_test, scaler, le
 
 
 def train_and_evaluate_models(X_train, y_train, X_test, y_test, le):
     # Tạo các mô hình riêng lẻ
-    rf = RandomForestClassifier(random_state=42, oob_score=True, n_jobs=-1, class_weight="balanced_subsample")
+    rf = RandomForestClassifier(random_state=42, oob_score=True, n_jobs=-1, class_weight="balanced_subsample",
+                                n_estimators=500)
     dt = DecisionTreeClassifier(random_state=42, class_weight="balanced")
-    et = ExtraTreesClassifier(random_state=42, n_jobs=-1, class_weight="balanced_subsample")
+    et = ExtraTreesClassifier(random_state=42, n_jobs=-1, class_weight="balanced_subsample", n_estimators=500)
 
     # Tạo voting ensemble
     voting_model = VotingClassifier(estimators=[
         ('rf', rf),
         ('dt', dt),
         ('et', et)
-    ], voting='hard')
+    ], voting='hard', n_jobs=-1, verbose=True)
 
     # Huấn luyện voting ensemble
     voting_model.fit(X_train, y_train)
@@ -80,6 +83,26 @@ def train_and_evaluate_models(X_train, y_train, X_test, y_test, le):
     return voting_model
 
 
+def feature_importance_optimized(voting_model, X_train):
+    # Calculate mean feature importances using numpy for efficiency
+    feature_importances = np.mean([est.feature_importances_ for est in voting_model.estimators_], axis=0)
+
+    # Create a DataFrame for easier sorting and manipulation
+    features_df = pd.DataFrame({'feature': X_train.columns, 'importance': feature_importances})
+    features_df.sort_values(by='importance', ascending=False, inplace=True)
+
+    # Calculate cumulative importance and select features until 90% importance is reached
+    features_df['cumulative_importance'] = features_df['importance'].cumsum()
+    selected_features = features_df[features_df['cumulative_importance'] <= 0.9]['feature'].tolist()
+
+    # Optionally, print the DataFrame for review
+    print(features_df)
+    print("Total number of features:", len(features_df))
+    print("Selected features:", selected_features)
+
+    return selected_features
+
+
 def save_models(voting_model, scaler, le):
     # Lưu mô hình và các bộ mã hóa
     joblib.dump(voting_model, 'voting_model.joblib')
@@ -88,7 +111,7 @@ def save_models(voting_model, scaler, le):
 
 
 # Đường dẫn tới file dữ liệu
-file_path = '/content/drive/MyDrive/MachineLearningCVE/data_processed.csv'
+file_path = 'MachineLearningCSV/MachineLearningCVE/data_processed.csv'
 
 # Load và làm sạch dữ liệu
 df, numeric_features = load_and_clean_data(file_path)
@@ -97,6 +120,14 @@ df, numeric_features = load_and_clean_data(file_path)
 X_train, X_test, y_train, y_test, scaler, le = preprocess_and_split_data(df, numeric_features)
 
 # Huấn luyện và đánh giá các mô hình
+voting_model = train_and_evaluate_models(X_train, y_train, X_test, y_test, le)
+
+# Tính toán độ quan trọng của các thuộc tính
+selected_features = feature_importance_optimized(voting_model, X_train)
+
+# Huấn luyện lại mô hình với các thuộc tính được chọn
+X_train, X_test, y_train, y_test = train_test_split(df[selected_features], df[' Label'], test_size=0.2, random_state=42,
+                                                    stratify=df[' Label'])
 voting_model = train_and_evaluate_models(X_train, y_train, X_test, y_test, le)
 
 # Lưu mô hình
