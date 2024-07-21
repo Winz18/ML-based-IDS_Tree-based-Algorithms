@@ -160,8 +160,8 @@ def process_packet(packet):
             'bwd_packets_per_s': flow['total_bwd_packets'] / flow_duration if flow_duration > 0 else 0,
             'min_packet_length': min(flow['fwd_packet_lengths'] + flow['bwd_packet_lengths'], default=0),
             'max_packet_length': max(flow['fwd_packet_lengths'] + flow['bwd_packet_lengths'], default=0),
-            'packet_length_mean': sum(flow['fwd_packet_lengths'] + flow['bwd_packet_lengths']) / (
-                    len(flow['fwd_packet_lengths']) + len(flow['bwd_packet_lengths'])) if (
+            'packet_length_mean': sum(flow['fwd_packet_lengths'] + flow['bwd_packet_lengths']) / len(
+                flow['fwd_packet_lengths'] + flow['bwd_packet_lengths']) if (
                     flow['fwd_packet_lengths'] + flow['bwd_packet_lengths']) else 0,
             'packet_length_std': pd.Series(flow['fwd_packet_lengths'] + flow['bwd_packet_lengths']).std() if (
                     flow['fwd_packet_lengths'] + flow['bwd_packet_lengths']) else 0,
@@ -175,57 +175,53 @@ def process_packet(packet):
             'urg_flag_count': flow['urg_flag_count'],
             'cwe_flag_count': flow['cwe_flag_count'],
             'ece_flag_count': flow['ece_flag_count'],
-            'down_up_ratio': flow['total_length_bwd_packets'] / flow['total_length_fwd_packets'] if flow[
-                                                                                                        'total_length_fwd_packets'] > 0 else 0,
+            'down_up_ratio': flow['total_fwd_packets'] / flow['total_bwd_packets'] if flow['total_bwd_packets'] else 0,
             'average_packet_size': sum(flow['fwd_packet_lengths'] + flow['bwd_packet_lengths']) / (
                     len(flow['fwd_packet_lengths']) + len(flow['bwd_packet_lengths'])) if (
                     flow['fwd_packet_lengths'] + flow['bwd_packet_lengths']) else 0,
-            'fwd_segment_size_avg': sum(flow['fwd_packet_lengths']) / flow['total_fwd_packets'] if flow[
-                                                                                                       'total_fwd_packets'] > 0 else 0,
-            'bwd_segment_size_avg': sum(flow['bwd_packet_lengths']) / flow['total_bwd_packets'] if flow[
-                                                                                                       'total_bwd_packets'] > 0 else 0,
-            'fwd_bytes_per_bulk_avg': 0,  # Placeholder
-            'fwd_packet_per_bulk_avg': 0,  # Placeholder
-            'fwd_bulk_rate_avg': 0,  # Placeholder
-            'bwd_bytes_per_bulk_avg': 0,  # Placeholder
-            'bwd_packet_per_bulk_avg': 0,  # Placeholder
-            'bwd_bulk_rate_avg': 0,  # Placeholder
+            'fwd_segment_size_avg': flow['total_length_fwd_packets'] / flow['total_fwd_packets'] if flow[
+                'total_fwd_packets'] else 0,
+            'bwd_segment_size_avg': flow['total_length_bwd_packets'] / flow['total_bwd_packets'] if flow[
+                'total_bwd_packets'] else 0,
+            'fwd_bytes_per_bulk_avg': flow['total_length_fwd_packets'] / flow['total_fwd_packets'] if flow[
+                'total_fwd_packets'] else 0,
+            'fwd_packet_per_bulk_avg': flow['total_fwd_packets'] / len(flow['fwd_packet_lengths']) if flow[
+                'fwd_packet_lengths'] else 0,
+            'fwd_bulk_rate_avg': flow['total_length_fwd_packets'] / len(flow['fwd_packet_lengths']) if flow[
+                'fwd_packet_lengths'] else 0,
+            'bwd_bytes_per_bulk_avg': flow['total_length_bwd_packets'] / flow['total_bwd_packets'] if flow[
+                'total_bwd_packets'] else 0,
+            'bwd_packet_per_bulk_avg': flow['total_bwd_packets'] / len(flow['bwd_packet_lengths']) if flow[
+                'bwd_packet_lengths'] else 0,
+            'bwd_bulk_rate_avg': flow['total_length_bwd_packets'] / len(flow['bwd_packet_lengths']) if flow[
+                'bwd_packet_lengths'] else 0,
             'subflow_fwd_packets': flow['total_fwd_packets'],
             'subflow_fwd_bytes': flow['total_length_fwd_packets'],
             'subflow_bwd_packets': flow['total_bwd_packets'],
             'subflow_bwd_bytes': flow['total_length_bwd_packets'],
-            'init_win_bytes_forward': 0,  # Placeholder
-            'init_win_bytes_backward': 0,  # Placeholder
-            'act_data_pkt_fwd': 0,  # Placeholder
-            'min_seg_size_forward': 0,  # Placeholder
-            'active_mean': 0,  # Placeholder
-            'active_std': 0,  # Placeholder
-            'active_max': 0,  # Placeholder
-            'active_min': 0,  # Placeholder
-            'idle_mean': 0,  # Placeholder
-            'idle_std': 0,  # Placeholder
-            'idle_max': 0,  # Placeholder
-            'idle_min': 0  # Placeholder
+            'init_win_bytes_forward': packet[TCP].window if TCP in packet else 0,
+            'init_win_bytes_backward': packet[TCP].window if TCP in packet else 0,
+            'act_data_pkt_fwd': len(flow['fwd_packet_lengths']),
+            'min_seg_size_forward': min(flow['fwd_packet_lengths'], default=0),
+            'active_mean': sum(flow['fwd_iat']) / len(flow['fwd_iat']) if flow['fwd_iat'] else 0,
+            'active_std': pd.Series(flow['fwd_iat']).std() if flow['fwd_iat'] else 0,
+            'active_max': max(flow['fwd_iat'], default=0),
+            'active_min': min(flow['fwd_iat'], default=0),
+            'idle_mean': sum(flow['bwd_iat']) / len(flow['bwd_iat']) if flow['bwd_iat'] else 0,
+            'idle_std': pd.Series(flow['bwd_iat']).std() if flow['bwd_iat'] else 0,
+            'idle_max': max(flow['bwd_iat'], default=0),
+            'idle_min': min(flow['bwd_iat'], default=0)
         }
 
-        df = df._append(packet_data, ignore_index=True)
+        df = df.append(packet_data, ignore_index=True)
 
 
-# Đặt thời gian thu thập (tính bằng giây)
-capture_duration = 10
-
-# Lưu thời gian bắt đầu
-start_time = time.time()
-
-# Sử dụng vòng lặp while với điều kiện thời gian
-while time.time() - start_time <= capture_duration:
-    sniff(iface='Wi-Fi', prn=process_packet, count=1)
-
-# Chuyển đổi dữ liệu thành DataFrame
-df = pd.DataFrame(df)
-print(df.head())
-
-# Lưu dữ liệu vào tệp CSV
-time_stamp = time.strftime('%Y-%m-%d_%H-%M-%S')
-df.to_csv(f'result_{time_stamp}.csv', index=False)
-
+def capture_packets(duration):
+    """
+    Capture network packets for a specified duration and store the data in a DataFrame.
+    """
+    global df
+    df = pd.DataFrame(columns=attributes)  # Reset DataFrame
+    print(f"Starting packet capture for {duration} seconds...")
+    sniff(prn=process_packet, store=0, timeout=duration)
+    print(f"Packet capture completed. {len(df)} packets captured.")

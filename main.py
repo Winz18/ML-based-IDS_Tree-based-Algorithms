@@ -1,10 +1,14 @@
 import requests
-import pandas as pd
+
+import packet_capture as pc
 
 
-def load_data(file_path):
-    df = pd.read_csv(file_path)
-    return df.to_dict(orient='records')
+def capture_data(duration):
+    """
+    Capture network data for a specified duration.
+    """
+    pc.capture_packets(duration)
+    return pc.df  # Assuming packet_capture.py saves data in a DataFrame called df
 
 
 def send_data_to_server(data):
@@ -20,12 +24,21 @@ def send_data_to_server(data):
 
 
 if __name__ == "__main__":
-    csv_file_path = 'extracted_features.csv'
-    data_to_send = load_data(csv_file_path)
-    result = send_data_to_server(data_to_send)
+    # Duration for which to capture network packets (in seconds)
+    capture_duration = 10
 
-    if result is not None:
-        print("Evaluation Result from IDS Server:")
-        print(result)
+    print("Capturing data...")
+    data_df = capture_data(capture_duration)
+
+    if not data_df.empty:
+        print("Data captured. Sending to server for evaluation...")
+        data_to_send = data_df.to_dict(orient='records')
+        result = send_data_to_server(data_to_send)
+
+        if result is not None:
+            print("Evaluation Result from IDS Server:")
+            print(result)
+        else:
+            print("Failed to get evaluation result from IDS Server.")
     else:
-        print("Failed to get evaluation result from IDS Server.")
+        print("No data captured. Please check your network and try again.")
