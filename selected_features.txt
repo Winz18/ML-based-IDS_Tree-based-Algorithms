@@ -1,0 +1,42 @@
+ Destination Port
+ Init_Win_bytes_backward
+ Average Packet Size
+ Bwd Packet Length Std
+Init_Win_bytes_forward
+Flow Bytes/s
+ PSH Flag Count
+Fwd IAT Total
+Bwd IAT Total
+ min_seg_size_forward
+Total Length of Fwd Packets
+ Flow Duration
+ Packet Length Mean
+ Avg Bwd Segment Size
+ Bwd Packet Length Mean
+ Subflow Fwd Bytes
+ Fwd Packet Length Max
+ Fwd IAT Max
+ Flow IAT Max
+ ACK Flag Count
+ Bwd Packet Length Min
+ Max Packet Length
+ Fwd Packet Length Mean
+ Fwd IAT Std
+ Bwd IAT Min
+ Bwd Header Length
+ Total Backward Packets
+Bwd Packet Length Max
+ Packet Length Std
+ Total Fwd Packets
+ Subflow Bwd Packets
+ Min Packet Length
+ Subflow Bwd Bytes
+ Packet Length Variance
+ Fwd IAT Mean
+ act_data_pkt_fwd
+ URG Flag Count
+Fwd PSH Flags
+ Flow IAT Std
+ Fwd Header Length.1
+ SYN Flag Count
+ Bwd Packets/s
