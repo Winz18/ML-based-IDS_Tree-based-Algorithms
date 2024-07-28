@@ -62,7 +62,7 @@ def preprocess_and_split_data(df, numeric_features):
 def train_model(X_train, y_train):
     rf = RandomForestClassifier(random_state=RANDOM_STATE, oob_score=True, n_jobs=-1, class_weight="balanced",
                                 n_estimators=N_ESTIMATORS)
-    dt = DecisionTreeClassifier(random_state=RANDOM_STATE, class_weight="balanced")
+    dt = DecisionTreeClassifier(criterion='gini', splitter='best', max_depth=10, min_samples_split=2, min_samples_leaf=1, random_state=0, ccp_alpha=0.0)
     et = ExtraTreesClassifier(random_state=RANDOM_STATE, n_jobs=-1, class_weight="balanced", n_estimators=N_ESTIMATORS)
 
     voting_model = VotingClassifier(estimators=[('rf', rf), ('dt', dt), ('et', et)], voting='hard', n_jobs=-1)
