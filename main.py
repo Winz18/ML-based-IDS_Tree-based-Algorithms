@@ -2,6 +2,7 @@ import packet_capture
 import requests
 import json
 import time
+import pandas as pd
 
 
 def send_data_to_server(data):
