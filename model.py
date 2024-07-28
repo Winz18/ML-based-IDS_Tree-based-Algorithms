@@ -1,96 +1,124 @@
+import os
+import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+from imblearn.over_sampling import SMOTE
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, VotingClassifier
 from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import LabelEncoder
-import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.tree import DecisionTreeClassifier
 
 
-''' Đọc dữ liệu từ tệp CSV và kết nối các tệp CSV '''
-
-file_path1 = "/content/drive/MyDrive/MachineLearningCVE/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv"
-file_path2 = "/content/drive/MyDrive/MachineLearningCVE/Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv"
-file_path5 = "/content/drive/MyDrive/MachineLearningCVE/Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv"
-file_path6 = "/content/drive/MyDrive/MachineLearningCVE/Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv"
-file_path3 = "/content/drive/MyDrive/MachineLearningCVE/Monday-WorkingHours.pcap_ISCX.csv"
-file_path4 = "/content/drive/MyDrive/MachineLearningCVE/Friday-WorkingHours-Morning.pcap_ISCX.csv"
-file_path7 = "/content/drive/MyDrive/MachineLearningCVE/Tuesday-WorkingHours.pcap_ISCX.csv"
-file_path8 = "/content/drive/MyDrive/MachineLearningCVE/Wednesday-workingHours.pcap_ISCX.csv"
-
-data1 = pd.read_csv(file_path1)
-data2 = pd.read_csv(file_path2)
-data5 = pd.read_csv(file_path5)
-data6 = pd.read_csv(file_path6)
-data3 = pd.read_csv(file_path3)
-data4 = pd.read_csv(file_path4)
-data7 = pd.read_csv(file_path7)
-data8 = pd.read_csv(file_path8)
-
-data1 = pd.concat([data1, data2, data3, data4, data5, data6, data7, data8])
+# Hằng số
+RANDOM_STATE = 42
+TEST_SIZE = 0.2
+SMOTE_SAMPLING_STRATEGY = {4: 1500}
+N_ESTIMATORS = 100
+DATA_FILE_PATH = 'MachineLearningCSV/MachineLearningCVE/data_processed.csv'
 
 
-''' Xử lý dữ liệu '''
+def load_and_clean_data(file_path):
+    if not os.path.exists(file_path):
+        print(f"File not found: {file_path}")
+        return None, None
 
-print("Before data processing:")
-print(data1.shape)
-print(data1.info())
-print(data1.head())
+    df = pd.read_csv(file_path)
 
-# Loại bỏ các hàng có giá trị thiếu lần 1
-data1 = data1.dropna()
+    # Loại bỏ các hàng có giá trị thiếu và trùng lặp
+    df = df.dropna().drop_duplicates()
 
-# Lấy danh sách các cột số (78 cột trừ Label)
-numeric_features = data1.select_dtypes(include=[np.number]).columns.tolist()
+    # Lấy danh sách các cột số
+    numeric_features = df.select_dtypes(include=[np.number]).columns.tolist()
 
-# Loại bỏ các hàng có giá trị vô hạn và số quá lớn
-data1 = data1[~data1[numeric_features].applymap(np.isinf).any(axis=1)]
-data1 = data1[(data1[numeric_features] <= np.finfo(np.float64).max).all(axis=1)]
+    # Loại bỏ các hàng có giá trị vô hạn và số quá lớn
+    df = df[~df[numeric_features].applymap(np.isinf).any(axis=1)]
+    df = df[(df[numeric_features] <= np.finfo(np.float64).max).all(axis=1)]
 
-# Loại bỏ các hàng có giá trị thiếu lần 2
-data1 = data1.dropna()
-
-# Chuẩn hóa các thuộc tính số
-scaler = StandardScaler()
-data1[numeric_features] = scaler.fit_transform(data1[numeric_features])
-
-# Loại bỏ các hàng trùng lặp
-data1 = data1.drop_duplicates()
-
-# Mã hóa nhãn
-le = LabelEncoder()
-data1[' Label'] = le.fit_transform(data1[' Label'])
+    return df, numeric_features
 
 
-''' Huấn luyện mô hình Random Forest '''
+def preprocess_and_split_data(df, numeric_features):
+    scaler = StandardScaler()
+    df[numeric_features] = scaler.fit_transform(df[numeric_features])
 
-# Tạo X (thuộc tính) và y (nhãn)
-X = data1.drop(columns=[' Label'], axis=1)
-y = data1[' Label']
+    le = LabelEncoder()
+    df[' Label'] = le.fit_transform(df[' Label'])
 
-# Chia data theo tỷ lệ 8:2
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X = df.drop(columns=[' Label'], axis=1)
+    y = df[' Label']
 
-# Sử dụng RandomForestClassifier để phân loại
-rf = RandomForestClassifier(random_state=42, oob_score=True, n_estimators=300,
-                            verbose=1, n_jobs=-1, class_weight="balanced_subsample",
-                            max_depth=10)
-rf.fit(X_train, y_train)
-y_pred = rf.predict(X_test)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE,
+                                                        stratify=y)
+    print(f"Original training set class distribution: {y_train.value_counts()}")
+
+    smote = SMOTE(random_state=RANDOM_STATE, sampling_strategy=SMOTE_SAMPLING_STRATEGY, n_jobs=-1)
+    X_train, y_train = smote.fit_resample(X_train, y_train)
+    print(f"Resampled training set class distribution: {y_train.value_counts()}")
+
+    return X_train, X_test, y_train, y_test, scaler, le
 
 
-''' Đánh giá mô hình '''
+def train_model(X_train, y_train):
+    rf = RandomForestClassifier(random_state=RANDOM_STATE, oob_score=True, n_jobs=-1, class_weight="balanced",
+                                n_estimators=N_ESTIMATORS)
+    dt = DecisionTreeClassifier(random_state=RANDOM_STATE, class_weight="balanced")
+    et = ExtraTreesClassifier(random_state=RANDOM_STATE, n_jobs=-1, class_weight="balanced", n_estimators=N_ESTIMATORS)
 
-# Hiển thị kết quả về độ chính xác
-print("Confusion Matrix:")
-print(confusion_matrix(y_test, y_pred))
-print("Classification Report:")
-print(classification_report(y_test, y_pred, target_names=le.classes_))
-print("OOB Score:")
-print(rf.oob_score_)
+    voting_model = VotingClassifier(estimators=[('rf', rf), ('dt', dt), ('et', et)], voting='hard', n_jobs=-1)
+    voting_model.fit(X_train, y_train)
 
-# Lưu mô hình và các bộ mã hóa
-joblib.dump(rf, 'random_forest_model.joblib')
-joblib.dump(scaler, 'scaler.joblib')
-joblib.dump(le, 'label_encoder.joblib')
+    return voting_model
+
+
+def evaluate_model(model, X_test, y_test, le):
+    y_pred = model.predict(X_test)
+    print("Confusion Matrix:")
+    print(confusion_matrix(y_test, y_pred))
+    print("Classification Report:")
+    print(classification_report(y_test, y_pred, target_names=le.classes_))
+
+
+def feature_importance_optimized(model, X_train):
+    feature_importances = np.mean([est.feature_importances_ for est in model.named_estimators_.values()], axis=0)
+
+    features_df = pd.DataFrame({'feature': X_train.columns, 'importance': feature_importances})
+    features_df.sort_values(by='importance', ascending=False, inplace=True)
+
+    features_df['cumulative_importance'] = features_df['importance'].cumsum()
+    selected_features = features_df[features_df['cumulative_importance'] <= 0.9]['feature'].tolist()
+
+    print(f"Total number of selected features: {len(selected_features)}")
+    with open('selected_features.txt', 'w') as f:
+        for feature in selected_features:
+            f.write(f"{feature}\n")
+
+    return selected_features
+
+
+def save_models(model, scaler, le):
+    joblib.dump(model, 'voting_model.joblib')
+    joblib.dump(scaler, 'scaler.joblib')
+    joblib.dump(le, 'label_encoder.joblib')
+
+
+if __name__ == '__main__':
+    df, numeric_features = load_and_clean_data(DATA_FILE_PATH)
+
+    # First training with all features
+    if df is not None and (
+            not os.path.exists('selected_features.txt') or open('selected_features.txt', 'r').read().strip() == ''):
+        X_train, X_test, y_train, y_test, scaler, le = preprocess_and_split_data(df, numeric_features)
+        voting_model = train_model(X_train, y_train)
+        evaluate_model(voting_model, X_test, y_test, le)
+        selected_features = feature_importance_optimized(voting_model, X_train)
+
+    # Training with selected features
+    else:
+        with open('selected_features.txt', 'r') as f:
+            selected_features = f.read().splitlines()
+        X_train, X_test, y_train, y_test, scaler, le = preprocess_and_split_data(df[selected_features + [' Label']],
+                                                                                 selected_features)
+        voting_model = train_model(X_train, y_train)
+        evaluate_model(voting_model, X_test, y_test, le)
+        save_models(voting_model, scaler, le)
