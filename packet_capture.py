@@ -1,7 +1,8 @@
-from scapy.all import sniff
-import pandas as pd
-import numpy as np
 from collections import defaultdict
+import numpy as np
+import pandas as pd
+from scapy.all import sniff
+from scapy.layers.inet import IP, TCP, UDP
 
 # Danh sách các thuộc tính cần tính toán
 columns = [
@@ -20,23 +21,29 @@ columns = [
     ' SYN Flag Count', ' Bwd Packets/s'
 ]
 
-
-def capture_packets(interface, duration):
-    packets = sniff(iface=interface, timeout=duration)
+def capture_packets(interface='Wi-Fi', duration=60):
+    packets = sniff(iface=interface, timeout=duration, prn=lambda x: x.summary())
     return packets
 
+def extract_flow_key(packet):
+    src = packet[IP].src
+    dst = packet[IP].dst
+    sport = packet[TCP].sport if TCP in packet else packet[UDP].sport
+    dport = packet[TCP].dport if TCP in packet else packet[UDP].dport
+    return (src, dst, sport, dport)
+
+def calculate_packet_lengths(packets):
+    return [len(pkt) for pkt in packets]
+
+def calculate_iats(packets):
+    return [packets[i].time - packets[i - 1].time for i in range(1, len(packets))]
 
 def process_packets(packets):
     flows = defaultdict(list)
 
     for packet in packets:
-        if 'IP' in packet and 'TCP' in packet:
-            src = packet['IP'].src
-            dst = packet['IP'].dst
-            sport = packet['TCP'].sport
-            dport = packet['TCP'].dport
-            flow_key = (src, dst, sport, dport)
-
+        if IP in packet and (TCP in packet or UDP in packet):
+            flow_key = extract_flow_key(packet)
             flows[flow_key].append(packet)
 
     data = []
@@ -46,65 +53,60 @@ def process_packets(packets):
             continue
 
         try:
-            packet_data = {}
-            packet_data[' Destination Port'] = flow_packets[0]['TCP'].dport if 'TCP' in flow_packets[0] else 0
-            packet_data[' Init_Win_bytes_backward'] = np.mean(
-                [pkt['TCP'].window for pkt in flow_packets if 'TCP' in pkt and hasattr(pkt['TCP'], 'window')])
-            packet_data[' Average Packet Size'] = np.mean([len(pkt) for pkt in flow_packets])
-            packet_data[' Bwd Packet Length Std'] = np.std([len(pkt) for pkt in flow_packets])
-            packet_data['Init_Win_bytes_forward'] = np.mean(
-                [pkt['TCP'].window for pkt in flow_packets if 'TCP' in pkt and hasattr(pkt['TCP'], 'window')])
-            packet_data['Flow Bytes/s'] = sum([len(pkt) for pkt in flow_packets]) / (
-                        flow_packets[-1].time - flow_packets[0].time)
-            packet_data[' PSH Flag Count'] = sum(
-                [pkt['TCP'].psh for pkt in flow_packets if 'TCP' in pkt and hasattr(pkt['TCP'], 'psh')])
-            packet_data['Fwd IAT Total'] = sum(
-                [flow_packets[i].time - flow_packets[i - 1].time for i in range(1, len(flow_packets))])
-            packet_data['Bwd IAT Total'] = sum(
-                [flow_packets[i].time - flow_packets[i - 1].time for i in range(1, len(flow_packets))])
-            packet_data[' min_seg_size_forward'] = min([len(pkt) for pkt in flow_packets])
-            packet_data['Total Length of Fwd Packets'] = sum([len(pkt) for pkt in flow_packets])
-            packet_data[' Flow Duration'] = flow_packets[-1].time - flow_packets[0].time
-            packet_data[' Packet Length Mean'] = np.mean([len(pkt) for pkt in flow_packets])
-            packet_data[' Avg Bwd Segment Size'] = np.mean([len(pkt) for pkt in flow_packets])
-            packet_data[' Bwd Packet Length Mean'] = np.mean([len(pkt) for pkt in flow_packets])
-            packet_data[' Subflow Fwd Bytes'] = sum([len(pkt) for pkt in flow_packets])
-            packet_data[' Fwd Packet Length Max'] = max([len(pkt) for pkt in flow_packets])
-            packet_data[' Fwd IAT Max'] = max(
-                [flow_packets[i].time - flow_packets[i - 1].time for i in range(1, len(flow_packets))])
-            packet_data[' Flow IAT Max'] = max(
-                [flow_packets[i].time - flow_packets[i - 1].time for i in range(1, len(flow_packets))])
-            packet_data[' ACK Flag Count'] = sum(
-                [pkt['TCP'].ack for pkt in flow_packets if 'TCP' in pkt and hasattr(pkt['TCP'], 'ack')])
-            packet_data[' Bwd Packet Length Min'] = min([len(pkt) for pkt in flow_packets])
-            packet_data[' Max Packet Length'] = max([len(pkt) for pkt in flow_packets])
-            packet_data[' Fwd Packet Length Mean'] = np.mean([len(pkt) for pkt in flow_packets])
-            packet_data[' Fwd IAT Std'] = np.std(
-                [flow_packets[i].time - flow_packets[i - 1].time for i in range(1, len(flow_packets))])
-            packet_data[' Bwd IAT Min'] = min(
-                [flow_packets[i].time - flow_packets[i - 1].time for i in range(1, len(flow_packets))])
-            packet_data[' Bwd Header Length'] = np.mean([len(pkt['TCP']) for pkt in flow_packets if 'TCP' in pkt])
-            packet_data[' Total Backward Packets'] = len(flow_packets)
-            packet_data['Bwd Packet Length Max'] = max([len(pkt) for pkt in flow_packets])
-            packet_data[' Packet Length Std'] = np.std([len(pkt) for pkt in flow_packets])
-            packet_data[' Total Fwd Packets'] = len(flow_packets)
-            packet_data[' Subflow Bwd Packets'] = len(flow_packets)
-            packet_data[' Min Packet Length'] = min([len(pkt) for pkt in flow_packets])
-            packet_data[' Subflow Bwd Bytes'] = sum([len(pkt) for pkt in flow_packets])
-            packet_data[' Packet Length Variance'] = np.var([len(pkt) for pkt in flow_packets])
-            packet_data[' Fwd IAT Mean'] = np.mean(
-                [flow_packets[i].time - flow_packets[i - 1].time for i in range(1, len(flow_packets))])
-            packet_data[' act_data_pkt_fwd'] = 0
-            packet_data[' URG Flag Count'] = sum(
-                [pkt['TCP'].urg for pkt in flow_packets if 'TCP' in pkt and hasattr(pkt['TCP'], 'urg')])
-            packet_data['Fwd PSH Flags'] = sum(
-                [pkt['TCP'].psh for pkt in flow_packets if 'TCP' in pkt and hasattr(pkt['TCP'], 'psh')])
-            packet_data[' Flow IAT Std'] = np.std(
-                [flow_packets[i].time - flow_packets[i - 1].time for i in range(1, len(flow_packets))])
-            packet_data[' Fwd Header Length.1'] = np.mean([len(pkt['TCP']) for pkt in flow_packets if 'TCP' in pkt])
-            packet_data[' SYN Flag Count'] = sum(
-                [pkt['TCP'].syn for pkt in flow_packets if 'TCP' in pkt and hasattr(pkt['TCP'], 'syn')])
-            packet_data[' Bwd Packets/s'] = len(flow_packets) / (flow_packets[-1].time - flow_packets[0].time)
+            packet_lengths = calculate_packet_lengths(flow_packets)
+            iats = calculate_iats(flow_packets)
+            flow_duration = flow_packets[-1].time - flow_packets[0].time if flow_packets else 0
+
+            packet_data = {
+                ' Destination Port': flow_packets[0][TCP].dport if TCP in flow_packets[0] else (
+                    flow_packets[0][UDP].dport if UDP in flow_packets[0] else 0),
+                ' Init_Win_bytes_backward': np.mean([pkt[TCP].window for pkt in flow_packets if TCP in pkt and hasattr(pkt[TCP], 'window')]) if flow_packets else 0,
+                ' Average Packet Size': np.mean(packet_lengths),
+                ' Bwd Packet Length Std': np.std(packet_lengths),
+                'Init_Win_bytes_forward': np.mean([pkt[TCP].window for pkt in flow_packets if TCP in pkt and hasattr(pkt[TCP], 'window')]) if flow_packets else 0,
+                'Flow Bytes/s': sum(packet_lengths) / flow_duration if flow_duration > 0 else 0,
+                ' PSH Flag Count': sum([pkt[TCP].psh for pkt in flow_packets if TCP in pkt and hasattr(pkt[TCP], 'psh')]),
+                'Fwd IAT Total': sum(iats),
+                'Bwd IAT Total': sum(iats),
+                ' min_seg_size_forward': min(packet_lengths) if packet_lengths else 0,
+                'Total Length of Fwd Packets': sum(packet_lengths),
+                ' Flow Duration': flow_duration,
+                ' Packet Length Mean': np.mean(packet_lengths) if packet_lengths else 0,
+                ' Avg Bwd Segment Size': np.mean(packet_lengths) if packet_lengths else 0,
+                ' Bwd Packet Length Mean': np.mean(packet_lengths) if packet_lengths else 0,
+                ' Subflow Fwd Bytes': sum(packet_lengths),
+                ' Fwd Packet Length Max': max(packet_lengths) if packet_lengths else 0,
+                ' Fwd IAT Max': max(iats) if iats else 0,
+                ' Flow IAT Max': max(iats) if iats else 0,
+                ' ACK Flag Count': sum([pkt[TCP].ack for pkt in flow_packets if TCP in pkt and hasattr(pkt[TCP], 'ack')]),
+                ' Bwd Packet Length Min': min(packet_lengths) if packet_lengths else 0,
+                ' Max Packet Length': max(packet_lengths) if packet_lengths else 0,
+                ' Fwd Packet Length Mean': np.mean(packet_lengths) if packet_lengths else 0,
+                ' Fwd IAT Std': np.std(iats) if iats else 0,
+                ' Bwd IAT Min': min(iats) if iats else 0,
+                ' Bwd Header Length': np.mean([len(pkt[TCP]) for pkt in flow_packets if TCP in pkt]),
+                ' Total Backward Packets': len(flow_packets),
+                'Bwd Packet Length Max': max(packet_lengths) if packet_lengths else 0,
+                ' Packet Length Std': np.std(packet_lengths) if packet_lengths else 0,
+                ' Total Fwd Packets': len(flow_packets),
+                ' Subflow Bwd Packets': len(flow_packets),
+                ' Min Packet Length': min(packet_lengths) if packet_lengths else 0,
+                ' Subflow Bwd Bytes': sum(packet_lengths),
+                ' Packet Length Variance': np.var(packet_lengths) if packet_lengths else 0,
+                ' Fwd IAT Mean': np.mean(iats) if iats else 0,
+                ' act_data_pkt_fwd': 0,
+                ' URG Flag Count': sum([pkt[TCP].urg for pkt in flow_packets if TCP in pkt and hasattr(pkt[TCP], 'urg')]),
+                'Fwd PSH Flags': sum([pkt[TCP].psh for pkt in flow_packets if TCP in pkt and hasattr(pkt[TCP], 'psh')]),
+                ' Flow IAT Std': np.std(iats) if iats else 0,
+                ' Fwd Header Length.1': np.mean([len(pkt[TCP]) for pkt in flow_packets if TCP in pkt]),
+                ' SYN Flag Count': sum([pkt[TCP].syn for pkt in flow_packets if TCP in pkt and hasattr(pkt[TCP], 'syn')]),
+                ' Bwd Packets/s': len(flow_packets) / flow_duration if flow_duration > 0 else 0
+            }
+
+            # Thay thế giá trị NaN và vô cùng bằng 0
+            for key, value in packet_data.items():
+                if isinstance(value, float) and (np.isnan(value) or np.isinf(value)):
+                    packet_data[key] = 0
 
             data.append(packet_data)
         except Exception as e:
@@ -112,8 +114,6 @@ def process_packets(packets):
 
     return pd.DataFrame(data, columns=columns)
 
-
-# Ví dụ về cách sử dụng (sẽ được sử dụng trong main.py)
 def get_packet_data():
     packets = capture_packets('Wi-Fi', 60)
     return process_packets(packets)
