@@ -16,6 +16,7 @@ TEST_SIZE = 0.2
 SMOTE_SAMPLING_STRATEGY = {4: 1500}
 N_ESTIMATORS = 100
 DATA_FILE_PATH = 'MachineLearningCSV/MachineLearningCVE/data_processed.csv'
+SELECTED_FEATURES_PATH = 'selected_features.txt'
 
 
 def load_and_clean_data(file_path):
@@ -45,14 +46,13 @@ def preprocess_and_split_data(df, numeric_features):
     le = LabelEncoder()
     df[' Label'] = le.fit_transform(df[' Label'])
 
-    X = df.drop(columns=[' Label'], axis=1)
+    X = df.drop(columns=[' Label'])
     y = df[' Label']
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE,
-                                                        stratify=y)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y)
     print(f"Original training set class distribution: {y_train.value_counts()}")
 
-    smote = SMOTE(random_state=RANDOM_STATE, sampling_strategy=SMOTE_SAMPLING_STRATEGY, n_jobs=-1)
+    smote = SMOTE(random_state=RANDOM_STATE, sampling_strategy=SMOTE_SAMPLING_STRATEGY)
     X_train, y_train = smote.fit_resample(X_train, y_train)
     print(f"Resampled training set class distribution: {y_train.value_counts()}")
 
@@ -60,8 +60,7 @@ def preprocess_and_split_data(df, numeric_features):
 
 
 def train_model(X_train, y_train):
-    rf = RandomForestClassifier(random_state=RANDOM_STATE, oob_score=True, n_jobs=-1, class_weight="balanced",
-                                n_estimators=N_ESTIMATORS)
+    rf = RandomForestClassifier(random_state=RANDOM_STATE, oob_score=True, n_jobs=-1, class_weight="balanced", n_estimators=N_ESTIMATORS)
     dt = DecisionTreeClassifier(random_state=RANDOM_STATE, class_weight="balanced")
     et = ExtraTreesClassifier(random_state=RANDOM_STATE, n_jobs=-1, class_weight="balanced", n_estimators=N_ESTIMATORS)
 
@@ -89,7 +88,7 @@ def feature_importance_optimized(model, X_train):
     selected_features = features_df[features_df['cumulative_importance'] <= 0.9]['feature'].tolist()
 
     print(f"Total number of selected features: {len(selected_features)}")
-    with open('selected_features.txt', 'w') as f:
+    with open(SELECTED_FEATURES_PATH, 'w') as f:
         for feature in selected_features:
             f.write(f"{feature}\n")
 
@@ -102,23 +101,26 @@ def save_models(model, scaler, le):
     joblib.dump(le, 'label_encoder.joblib')
 
 
-if __name__ == '__main__':
+def main():
     df, numeric_features = load_and_clean_data(DATA_FILE_PATH)
 
-    # First training with all features
-    if df is not None and (
-            not os.path.exists('selected_features.txt') or open('selected_features.txt', 'r').read().strip() == ''):
-        X_train, X_test, y_train, y_test, scaler, le = preprocess_and_split_data(df, numeric_features)
-        voting_model = train_model(X_train, y_train)
-        evaluate_model(voting_model, X_test, y_test, le)
-        selected_features = feature_importance_optimized(voting_model, X_train)
+    if df is not None:
+        if not os.path.exists(SELECTED_FEATURES_PATH) or open(SELECTED_FEATURES_PATH, 'r').read().strip() == '':
+            # First training with all features
+            X_train, X_test, y_train, y_test, scaler, le = preprocess_and_split_data(df, numeric_features)
+            voting_model = train_model(X_train, y_train)
+            evaluate_model(voting_model, X_test, y_test, le)
+            selected_features = feature_importance_optimized(voting_model, X_train)
+        else:
+            # Training with selected features
+            with open(SELECTED_FEATURES_PATH, 'r') as f:
+                selected_features = f.read().splitlines()
+            X_train, X_test, y_train, y_test, scaler, le = preprocess_and_split_data(df[selected_features + [' Label']], selected_features)
+            voting_model = train_model(X_train, y_train)
+            evaluate_model(voting_model, X_test, y_test, le)
 
-    # Training with selected features
-    else:
-        with open('selected_features.txt', 'r') as f:
-            selected_features = f.read().splitlines()
-        X_train, X_test, y_train, y_test, scaler, le = preprocess_and_split_data(df[selected_features + [' Label']],
-                                                                                 selected_features)
-        voting_model = train_model(X_train, y_train)
-        evaluate_model(voting_model, X_test, y_test, le)
         save_models(voting_model, scaler, le)
+
+
+if __name__ == '__main__':
+    main()
